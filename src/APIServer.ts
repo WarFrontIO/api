@@ -74,6 +74,7 @@ export function registerPostRoute(path: string, callback: (req: IncomingMessage,
 }
 
 require("./auth/AuthenticationManager");
+require("./util/APIDocs");
 
 server.listen(port);
 console.log(`Server running on port ${port}`);

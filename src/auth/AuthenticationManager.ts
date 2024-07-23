@@ -74,7 +74,7 @@ class AuthenticationManager {
 			res.writeHead(302, {Location: `${clientUrl}/auth/?token=${authToken}`});
 			res.end();
 		}).catch((e: AuthenticationException) => {
-			res.writeHead(400, {"Content-Type": "text/plain"});
+			res.writeHead(422, {"Content-Type": "text/plain"});
 			res.write(e.message);
 			res.end();
 		});
@@ -89,15 +89,22 @@ class AuthenticationManager {
 	async handleInitialToken(_req: IncomingMessage, res: ServerResponse, url: URL) {
 		const token = url.searchParams.get("token") || "";
 		const device = url.searchParams.get("device") || "";
-		if (!token || !device || !this.authTokens.has(token)) {
+		if (!token || !device) {
 			res.writeHead(400);
+			res.end();
+			return;
+		}
+
+		if (!this.authTokens.has(token)) {
+			res.writeHead(401, {"Content-Type": "text/plain"});
+			res.write("Invalid token");
 			res.end();
 			return;
 		}
 
 		const authToken = this.authTokens.get(token);
 		if (!authToken || authToken.expiresAt < Date.now()) {
-			res.writeHead(400, {"Content-Type": "text/plain"});
+			res.writeHead(401, {"Content-Type": "text/plain"});
 			res.write("Token expired, please try again");
 			res.end();
 			return;
