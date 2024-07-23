@@ -5,7 +5,7 @@ export const port = parseInt(process.env.PORT ?? "13527");
 /**
  * Host URL
  */
-export const hostURL = (process.env.HOST_URL as string).endsWith("/") ? (process.env.HOST_URL as string).slice(0, -1) : process.env.HOST_URL as string;
+export const hostURL = process.env.HOST_URL ? process.env.HOST_URL.endsWith("/") ? process.env.HOST_URL.slice(0, -1) : process.env.HOST_URL : undefined as unknown as string;
 /**
  * Client URL
  */
@@ -37,7 +37,7 @@ export const dbPassword = process.env.DB_PASS;
 
 if (!hostURL) {
 	console.error("Server URL not provided");
-	console.error("Please provide a public URL for the server using the SERVER_URL environment variable");
+	console.error("Please provide a public URL for the server using the HOST_URL environment variable");
 	process.exit(1);
 }
 
