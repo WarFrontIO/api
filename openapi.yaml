@@ -210,6 +210,8 @@ paths:
                     type: string
                     description: The new refresh token
                     example: 44091ba9bcd6b5b56b4c4407acb40f1c5df0b6e73b88fd8abd3f877bf1fda6d8
+                  user:
+                    $ref: "#/components/schemas/User"
         400:
           description: Missing token or device ID
         401:
@@ -277,6 +279,30 @@ paths:
                 type: string
               example: Unauthorized
 components:
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          description: The user ID
+          example: bMzn4Y
+        service:
+          type: string
+          description: The OAuth2 provider used
+          example: discord
+        user_id:
+          type: string
+          description: The user ID from the OAuth2 provider
+          example: 1194399064440189029
+        username:
+          type: string
+          description: The username from the OAuth2 provider
+          example: example_user
+        avatar_url:
+          type: string
+          description: The avatar URL from the OAuth2 provider
+          example: https://example.com/avatar.png
   parameters:
     AuthProvider:
       name: provider
