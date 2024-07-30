@@ -97,6 +97,17 @@ registerRoute("", (req, res) => {
 				});
 			});
 
+			const range = document.createRange();
+			// Properly wrap long plain text examples
+			const fragment = range.createContextualFragment(\`
+<style>
+pre {
+	white-space: pre-wrap;
+	word-break: break-all;
+}
+</style>
+			\`);
+
 			//Use more appropriate colors for response codes
 			doc.shadowRoot.querySelectorAll("api-response").forEach(response => {
 				//Replace inline codes with buttons
@@ -114,6 +125,8 @@ registerRoute("", (req, res) => {
 					if (isNaN(code)) return;
 					button.style.setProperty("--primary-color", code >= 500 ? "#9749d7" : code >= 400 ? "#c83446" : code >= 300 ? "#457493" : code >= 200 ? "#4f7348" : "#457493");
 				});
+
+				response.shadowRoot.append(fragment.cloneNode(true));
 			});
 
 			//Collapsable auth table
