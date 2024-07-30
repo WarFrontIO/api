@@ -6,7 +6,7 @@ import {randomBytes, timingSafeEqual} from "node:crypto";
 import {clientUrl, serviceToken} from "../util/Conf";
 import {AuthenticationException} from "../util/exception/AuthenticationException";
 import {housekeeping} from "../util/Housekeeping";
-import {generateToken, verifyToken} from "./TokenManager";
+import {generateExternalToken, generateToken, verifyToken} from "./TokenManager";
 import {logout, refreshDevice, registerDevice, revokeDevice} from "../db/adapters/AuthenticationAdapter";
 import {prettifyId} from "../util/IdPrettifier";
 
@@ -155,7 +155,7 @@ class AuthenticationManager {
 			return;
 		}
 
-		const user = await handler.getUser(tokenData.user_id).then(user => toAPIUser(user, tokenData.id, tokenData.service)).catch(() => null);
+		const user = await handler.getUser(tokenData.user_id).then(user => buildAPIUser(user, tokenData.id, tokenData.service)).catch(() => null);
 		if (!user) {
 			res.writeHead(500, {"Content-Type": "text/plain"});
 			res.write("Failed to get user information");
@@ -174,6 +174,32 @@ class AuthenticationManager {
 		res.writeHead(200, {"Content-Type": "application/json"});
 		res.write(JSON.stringify({access_token: accessToken.token, expires_in: accessToken.expiresIn - 60, refresh_token: tokenData.token, user}));
 		res.end();
+	}
+
+	/**
+	 * Handle external token request, this will generate a token to be used with third-party services.
+	 * @param req the request
+	 * @param res the response
+	 * @param url the URL
+	 */
+	handleExternalToken(req: IncomingMessage, res: ServerResponse, url: URL) {
+		const host = url.searchParams.get("host") || "";
+		if (!host) {
+			res.writeHead(400);
+			res.end();
+			return;
+		}
+
+		auth(req, res).then((user) => {
+			generateExternalToken(toAPIUser(user), host).then((token) => {
+				res.writeHead(200, {"Content-Type": "text/plain"});
+				res.write(token);
+				res.end();
+			}).catch(() => {
+				res.writeHead(500);
+				res.end();
+			});
+		}).catch(() => {});
 	}
 
 	/**
@@ -256,6 +282,7 @@ manager.registerService("discord", DiscordAuthenticationService.build());
 
 registerPostRoute("/auth", manager.handleInitialToken.bind(manager));
 registerPostRoute("/token", manager.handleRefreshToken.bind(manager));
+registerPostRoute("/token/external", manager.handleExternalToken.bind(manager));
 registerPostRoute("/revoke", manager.revoke.bind(manager));
 registerPostRoute("/logout", manager.logout.bind(manager));
 
@@ -307,6 +334,10 @@ export type User = {
 export type APIUser = Omit<User, "id"> & { id: string };
 export type ServiceUser = Omit<User, "id" | "service"> & Partial<Pick<User, "id" | "service">>;
 
-export function toAPIUser(user: ServiceUser, id: number, service: string): APIUser {
+export function buildAPIUser(user: ServiceUser, id: number, service: string): APIUser {
 	return {...user, id: prettifyId(id), service};
+}
+
+export function toAPIUser(user: User): APIUser {
+	return {...user, id: prettifyId(user.id)};
 }

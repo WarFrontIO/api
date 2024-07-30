@@ -2,7 +2,7 @@ import {existsSync, readFileSync, writeFileSync} from "node:fs";
 import {generateKeyPairSync} from "node:crypto";
 import {sign, verify} from "jsonwebtoken";
 import {User, auth, APIUser} from "./AuthenticationManager";
-import {prettifyId, unprettifyId} from "../util/IdPrettifier";
+import {unprettifyId} from "../util/IdPrettifier";
 
 if (!existsSync("private.key") || !existsSync("public.key")) {
 	console.info("No key pair found, generating new one...");
@@ -24,7 +24,7 @@ const publicKey = readFileSync("public.key");
  */
 export async function generateToken(user: APIUser): Promise<{ token: string, expiresIn: number }> {
 	return new Promise((resolve, reject) => {
-		sign(user, privateKey, {algorithm: "RS256", expiresIn: 60 * 15}, (err, token) => {
+		sign({type: "user", ...user}, privateKey, {algorithm: "RS256", expiresIn: 60 * 15}, (err, token) => {
 			if (err || !token) {
 				reject(err);
 				return;
@@ -35,7 +35,25 @@ export async function generateToken(user: APIUser): Promise<{ token: string, exp
 }
 
 /**
- * Verify a token
+ * Generate an external token, used to authenticate with third-party services
+ * This token is only valid for the specified host
+ * @param user the user to generate the token for
+ * @param host the server to generate the token for
+ */
+export async function generateExternalToken(user: APIUser, host: string): Promise<string> {
+	return new Promise((resolve, reject) => {
+		sign({type: "external", ...user}, privateKey, {algorithm: "RS256", expiresIn: 60, audience: host}, (err, token) => {
+			if (err || !token) {
+				reject(err);
+				return;
+			}
+			resolve(token);
+		});
+	});
+}
+
+/**
+ * Verify a token, only accepts user tokens
  * @param token the token to verify
  * @returns the user information
  * @internal Consider using the wrapper {@link auth} instead
@@ -47,7 +65,7 @@ export async function verifyToken(token: string): Promise<User> {
 				reject();
 				return;
 			}
-			if (typeof decoded.id !== "string" || typeof decoded.service !== "string" || typeof decoded.user_id !== "string" || typeof decoded.username !== "string" || typeof decoded.avatar_url !== "string") {
+			if (typeof decoded.type !== "string" || decoded.type !== "user" || typeof decoded.id !== "string" || typeof decoded.service !== "string" || typeof decoded.user_id !== "string" || typeof decoded.username !== "string" || typeof decoded.avatar_url !== "string") {
 				reject();
 				return;
 			}

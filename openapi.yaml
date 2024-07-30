@@ -201,7 +201,7 @@ paths:
                   access_token:
                     type: string
                     description: The new access token
-                    example: eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImJNWm40WSIsInNlcnZpY2UiOiJkaXNjb3JkIiwidXNlcl9pZCI6IjExOTQzOTkwNjQ0NDAxODkwMjkiLCJ1c2VybmFtZSI6ImV4YW1wbGVfdXNlciIsImF2YXRhcl91cmwiOiJodHRwczovL2V4YW1wbGUuY29tL2F2YXRhci5wbmciLCJpYXQiOjE3MjE2NjUxOTQsImV4cCI6MTcyMTY2NjA5NH0.I4hfWpylPwx4yhRXjM_ggGeIuTvf7NeiphlMnBovRvtIqlbgA6NKX0lNPrhWgfawFHxAdfS3T7ZRy2jbJ_N6XHgXMKLrb45Yd61fz59QgO4MRX9GF3Qe69ZpdFgOCLMgBX3LK7KBn4AFlnOR8INO6InDmKr2hFJDkzPiUfnYxjezdQzwRoGlAp8jYQtxm4lFY8JEnRQcv51urGLP5xNySNb8ulKo8UFyoIT_jZNg1a0pFheilMb3hd0HE4Dm8Z0rrnPJydPDKOzCksHMbapg6RGYK1XBGINQ54XOuoPOfmb37haFp3EmmY0BF7gFwJ4MAdO-UML9siwDa-dFvugbQMxxQDSSgM1b68C7n_YxnuPBEEpx1lbb80LOVM355fy189M28nMT8E5pRb62QHyd-6FPfTYB84sC1QqTob8hfjNzRTnO9ikJ8g3vsKdAT9VDZ4f-XFq5pvv6wBsD8t2eie7QWNMdahTKxEhnqrBt9pfl1_pCol971W9wDKwzdeHoQGMnRPPIkRx_Qpl598wmpHd8JktJqQBRwYGRIoh4fZERUTsckeFbEelTLLBUfDEMZNL_8hIxgXpll2kcTV0LQOaN6TdaekZA7EHfiZ8QaZ3k9EQifzQCZfqwYi08JaWk5EdIMJ0ygQ33aGYXU2EJZ573BxklDpsM8MldZirBJpk
+                    example: eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0eXBlIjoidXNlciIsImlkIjoiYk1abjRZIiwic2VydmljZSI6ImRpc2NvcmQiLCJ1c2VyX2lkIjoiMTE5NDM5OTA2NDQ0MDE4OTAyOSIsInVzZXJuYW1lIjoiZXhhbXBsZV91c2VyIiwiYXZhdGFyX3VybCI6Imh0dHBzOi8vZXhhbXBsZS5jb20vYXZhdGFyLnBuZyIsImlhdCI6MTcyMjM3ODU0NCwiZXhwIjoxNzIyMzc5NDQ0fQ.bwNkOyOA18CIOmVnhZSDKedhokEdUys0jlozvS9_DWNlajhkNg82WVPDNoK-GuCG72nNaLkaeZ8VKekL7E5Q-cQmbqc8cJTnX8it5dUFn0hffFrP3a0J9UjCEHnlN_OsGYKBlPeKrUQJJVl6BgrqlekMFQhpXPxjHE90hACZXsD-1iWZEsxrAW7caFJOTwzRVPW4QC2ZGvkaiKHwKbr7A2GmRoD9cX7i_kKHsGE5leCPxHhL1gVLqQEv60OSctpNQw1EGn8dKDbJ4jLYsIHL-PTrQXYmwHMSeo9elObTJBFxZhrPCMTHFu3MRLb2itWzdG5zAB3IkA-7rSJethEFCEfacQjVV8i5oLDK7j0go1she1nw2taR0KHsd_Z_Zrc5wSVxYRGflZewYfdDpQMegLJPxu5KBNsPgv0o2L6KA4EwxfhZLqk__MO4b7WBJ8twBNLQRmDIJCxavqT-EiQ7NQlDvm0um7wInZhD3Mravr8XhMgy-QIBSpCMeFM91K3WEsp7ErzaRI-jDW8mtPguz0yH1MZl-zcoBvBTg_JFnZGG8UuMy_7ujNGOiIUKt6oLkcfSd4WWga2NfHZOkAJHT0Yg4GpsCZ2LUYmTTD8gsElaRyxLoSQpvyf28kVHVCl3ovEGD6oFSSsHodpYWBPkanVuFAy5b4tQn8k0VWriIIg
                   expires_in:
                     type: integer
                     description: The expiration time of the access token in seconds
@@ -230,6 +230,48 @@ paths:
                 type: string
                 description: The error message
               example: Failed to get user information
+  /token/external/:
+    post:
+      operationId: requestTokenExternal
+      summary: Request access token for external services
+      description: |
+        When authenticating with external services, a separate access token is required, to not expose the main access token.
+
+        The tokens provided by this endpoint have the type `external` and are only valid for the specified host.
+        Their expiration time is 1 minute as they are only used for the initial handshake with the external service.
+        Make sure to verify the `aud` claim when handling these tokens.
+
+        It can be decoded using the same public key as the main access token and will contain the same information.
+      tags:
+        - User Authentication
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                host:
+                  type: string
+                  description: The host for which the token is requested
+                  example: example.com
+      security:
+        - userAuth: []
+      responses:
+        200:
+          description: Successful token generation
+          content:
+            text/plain:
+              schema:
+                type: string
+                description: The access token
+              example: eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0eXBlIjoiZXh0ZXJuYWwiLCJpZCI6ImJNWm40WSIsInNlcnZpY2UiOiJkaXNjb3JkIiwidXNlcl9pZCI6IjExOTQzOTkwNjQ0NDAxODkwMjkiLCJ1c2VybmFtZSI6ImV4YW1wbGVfdXNlciIsImF2YXRhcl91cmwiOiJodHRwczovL2V4YW1wbGUuY29tL2F2YXRhci5wbmciLCJpYXQiOjE3MjIzNzg1NDQsImV4cCI6MTcyMjM3ODYwNCwiYXVkIjoiZXhhbXBsZS5jb20ifQ.laVX-DrIDu8qxPq42AmIh6O287YX_jtY5jIqiG53VDNpO-Vb3v7pQORkj-e6j25-MEzjXp6xqOimXxdoJeLLrcTs0k4ZqXuS9F6jrwzklro5q-xLrM6RlFpMYoR89lk-oruD82Y0lvZp_3artsjIhQ9Ktvp-XUIm5eOlLrr14rQw5ol8rbi-YJ8p6dZFnjpvQ4CWlzcwevbMnJLrqY1FVl5OaRs1JoA62iyL6YXOS0tBTyGvnxNFqdBB2WFO213pX7tdv05jmkShnDKjqnsrVu6tSjJX2bb-qUaKV9Nm1QbDLGFSke3ma7t4gKIMs1pQm-UiAlaUT9b0JiU2540qMyUBwC4tN-uKJtkIqeeWqc7AI8axKfPzzC1s1vAJcea41Jk4nKvKZgQCDfcFz2_oNyizbh9vE38uzGR9y65GtOKkgYVPTR1-I5XPe3JR_AL3vrcfp-mG_ExY34uldRc-liNj4loRSMm0jhxczMNGuMETHNazwG_MJEfD6exCzh5SLMy-w5Kq6caI0O0r8UsnUXpv05i6Y3Q0kuM90vtC_60TVIhCJM_rVVOIg1XErb2LlQagcgx1nieofrRCMUZGpefzgphz-GL0V0Zrm8557OhVd3UjlB_8RDk7NeyJmMcQhTKnf4HNMgwgCSesEZ5_vqckJwN9yHmhHesOL1feHnE
+        400:
+          description: Missing host
+        401:
+          $ref: "#/components/responses/Unauthorized"
+        500:
+          description: Error generating access token
   /revoke/:
     post:
       operationId: revokeToken
@@ -272,12 +314,7 @@ paths:
         200:
           description: User logged out
         401:
-          description: Invalid or outdated access token
-          content:
-            text/plain:
-              schema:
-                type: string
-              example: Unauthorized
+          $ref: "#/components/responses/Unauthorized"
 components:
   schemas:
     User:
@@ -294,7 +331,7 @@ components:
         user_id:
           type: string
           description: The user ID from the OAuth2 provider
-          example: 1194399064440189029
+          example: "1194399064440189029"
         username:
           type: string
           description: The username from the OAuth2 provider
@@ -303,6 +340,14 @@ components:
           type: string
           description: The avatar URL from the OAuth2 provider
           example: https://example.com/avatar.png
+  responses:
+    Unauthorized:
+      description: Unauthorized
+      content:
+        text/plain:
+          schema:
+            type: string
+          example: Unauthorized
   parameters:
     AuthProvider:
       name: provider
