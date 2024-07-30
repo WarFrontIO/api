@@ -1,3 +1,5 @@
+import {randomBytes} from "node:crypto";
+
 /**
  * Port to run the server on
  */
@@ -13,7 +15,7 @@ export const clientUrl = process.env.CLIENT_URL ? (process.env.CLIENT_URL as str
 /**
  * Private internal service token
  */
-export const serviceToken = Buffer.from(process.env.SERVICE_TOKEN ?? "", "base64");
+export const serviceToken = process.env.SERVICE_TOKEN ? Buffer.from(process.env.SERVICE_TOKEN, "base64") : randomBytes(32);
 /**
  * MySQL database host
  */
@@ -41,14 +43,12 @@ if (!hostURL) {
 	process.exit(1);
 }
 
-if (!serviceToken.length) {
-	console.error("Service token not provided");
-	console.error("Please provide a secure token shared between warfront servers using the SERVICE_TOKEN environment variable");
-	process.exit(1);
+if (!process.env.SERVICE_TOKEN) {
+	console.warn("Service token not provided, using a random token");
 }
 
-if (!dbName || !dbUser || !dbPassword) {
+if (!dbName || !dbUser || dbPassword === undefined) {
 	console.error("Database credentials not provided");
-	console.error("Please provide the database credentials using the DB_NAME, DB_USER, and DB_PASSWORD environment variables");
+	console.error("Please provide the database credentials using the DB_NAME, DB_USER, and DB_PASS environment variables");
 	process.exit(1);
 }
