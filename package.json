@@ -1,5 +1,5 @@
 {
-  "name": "warfront-client",
+  "name": "warfront-api",
   "dependencies": {
     "typescript": "^5.4.5",
     "@types/node": "^20.12.13",
