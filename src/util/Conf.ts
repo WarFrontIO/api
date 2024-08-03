@@ -7,11 +7,11 @@ export const port = parseInt(process.env.PORT ?? "13527");
 /**
  * Host URL
  */
-export const hostURL = process.env.HOST_URL ? process.env.HOST_URL.endsWith("/") ? process.env.HOST_URL.slice(0, -1) : process.env.HOST_URL : undefined as unknown as string;
+export const hostURL = process.env.HOST_URL ? (process.env.HOST_URL.startsWith("http") ? process.env.HOST_URL : "https://" + process.env.HOST_URL).replace(/\/$/, "") : undefined;
 /**
  * Client URL
  */
-export const clientUrl = process.env.CLIENT_URL ? (process.env.CLIENT_URL as string).endsWith("/") ? (process.env.CLIENT_URL as string).slice(0, -1) : process.env.CLIENT_URL as string : "https://warfront.io";
+export const clientUrl = process.env.CLIENT_URL ? process.env.CLIENT_URL.replace(/\/$/, "") : "https://warfront.io";
 /**
  * Private internal service token
  */
