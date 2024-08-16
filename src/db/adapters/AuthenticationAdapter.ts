@@ -3,7 +3,7 @@ import {housekeeping} from "../../util/Housekeeping";
 import {randomBytes} from "node:crypto";
 
 run("CREATE TABLE IF NOT EXISTS accounts (id INTEGER NOT NULL AUTO_INCREMENT, service VARCHAR(20) NOT NULL, user_id VARCHAR(20) NOT NULL, token TEXT NOT NULL, PRIMARY KEY (service, user_id), KEY (id));", []).catch(() => {});
-run("CREATE TABLE IF NOT EXISTS account_tokens (id INTEGER NOT NULL, device_id VARCHAR(32) NOT NULL, token VARCHAR(64) NOT NULL, expires_at INTEGER NOT NULL, PRIMARY KEY (id, device_id), KEY (id));", []).catch(() => {});
+run("CREATE TABLE IF NOT EXISTS account_tokens (id INTEGER NOT NULL AUTO_INCREMENT, user INTEGER NOT NULL, token VARCHAR(64) NOT NULL, expires_at INTEGER NOT NULL, PRIMARY KEY (id), KEY (user));", []).catch(() => {});
 
 function cleanTokens() {
 	run("DELETE FROM account_tokens WHERE expires_at < UNIX_TIMESTAMP();", []).catch(() => {});
@@ -35,28 +35,26 @@ export async function getToken(service: string, userId: string): Promise<string>
 /**
  * Register a device for a user
  * @param id The user ID
- * @param device The device ID
  * @returns Refresh token for the device
  */
-export async function registerDevice(id: number, device: string): Promise<string> {
+export async function registerDevice(id: number): Promise<string> {
 	const token = randomBytes(32).toString("hex");
-	await run("INSERT INTO account_tokens (id, device_id, token, expires_at) VALUES (?, ?, ?, UNIX_TIMESTAMP() + 30 * 24 * 60 * 60) AS new ON DUPLICATE KEY UPDATE token = new.token, expires_at = new.expires_at;", [id, device, token]).catch(() => {});
+	await run("INSERT INTO account_tokens (user, token, expires_at) VALUES (?, ?, UNIX_TIMESTAMP() + 30 * 24 * 60 * 60);", [id, token]).catch(() => {});
 	return token;
 }
 
 /**
  * Refresh a device token
  * @param token The token to refresh
- * @param device The device ID
  * @returns The wf ID, service, user ID and new token
  */
-export async function refreshDevice(token: string, device: string): Promise<{ id: number, service: string, user_id: string, token: string }> {
+export async function refreshDevice(token: string): Promise<{ id: number, service: string, user_id: string, token: string }> {
 	const newToken = randomBytes(32).toString("hex");
-	const changed = await run("UPDATE account_tokens SET token = ?, expires_at = UNIX_TIMESTAMP() + 30 * 24 * 60 * 60 WHERE token = ? AND device_id = ? AND expires_at > UNIX_TIMESTAMP();", [newToken, token, device]).catch(() => 0);
+	const changed = await run("UPDATE account_tokens SET token = ?, expires_at = UNIX_TIMESTAMP() + 30 * 24 * 60 * 60 WHERE token = ? AND expires_at > UNIX_TIMESTAMP();", [newToken, token]).catch(() => 0);
 	if (!changed) {
 		throw new Error("Token not found");
 	}
-	const user = await get<{ id: number, service: string, user_id: string }>("SELECT id, service, user_id FROM accounts WHERE id = (SELECT id FROM account_tokens WHERE token = ? AND device_id = ?);", [newToken, device]).catch(() => null);
+	const user = await get<{ id: number, service: string, user_id: string }>("SELECT id, service, user_id FROM accounts WHERE id = (SELECT user FROM account_tokens WHERE token = ?);", [newToken]).catch(() => null);
 	if (!user) {
 		throw new Error("User not found");
 	}
@@ -76,5 +74,5 @@ export async function revokeDevice(token: string): Promise<void> {
  * @param id The user ID
  */
 export async function logout(id: number): Promise<void> {
-	await run("DELETE FROM account_tokens WHERE id = ?;", [id]).catch(() => {});
+	await run("DELETE FROM account_tokens WHERE user = ?;", [id]).catch(() => {});
 }

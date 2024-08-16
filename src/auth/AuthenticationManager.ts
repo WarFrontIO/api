@@ -88,8 +88,7 @@ class AuthenticationManager {
 	 */
 	async handleInitialToken(_req: IncomingMessage, res: ServerResponse, url: URL) {
 		const token = url.searchParams.get("token") || "";
-		const device = url.searchParams.get("device") || "";
-		if (!token || !device) {
+		if (!token) {
 			res.writeHead(400);
 			res.end();
 			return;
@@ -111,7 +110,7 @@ class AuthenticationManager {
 		}
 		this.authTokens.delete(token);
 
-		const refreshToken = await registerDevice(authToken.id, device).catch(() => null);
+		const refreshToken = await registerDevice(authToken.id).catch(() => null);
 		if (!refreshToken) {
 			res.writeHead(500, {"Content-Type": "text/plain"});
 			res.write("Failed to generate refresh token");
@@ -132,14 +131,13 @@ class AuthenticationManager {
 	 */
 	async handleRefreshToken(_req: IncomingMessage, res: ServerResponse, url: URL) {
 		const token = url.searchParams.get("token") || "";
-		const device = url.searchParams.get("device") || "";
-		if (!token || !device) {
+		if (!token) {
 			res.writeHead(400);
 			res.end();
 			return;
 		}
 
-		const tokenData = await refreshDevice(token, device).catch(() => null);
+		const tokenData = await refreshDevice(token).catch(() => null);
 		if (!tokenData) {
 			res.writeHead(401, {"Content-Type": "text/plain"});
 			res.write("Invalid token");
