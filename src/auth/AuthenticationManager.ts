@@ -12,7 +12,7 @@ import {prettifyId} from "../util/IdPrettifier";
 
 class AuthenticationManager {
 	private readonly services: Map<string, AuthenticationService> = new Map();
-	private readonly activeStates: Map<string, number> = new Map();
+	private readonly activeStates: Map<string, { timeout: number, clientState: string }> = new Map();
 	private readonly authTokens: Map<string, { id: number, expiresAt: number }> = new Map();
 
 	/**
@@ -35,12 +35,19 @@ class AuthenticationManager {
 	 * Handle login request, this will redirect the user to the login provider.
 	 * @param _req the request
 	 * @param res the response
-	 * @param _url the URL
+	 * @param url the URL
 	 * @param service the authentication service
 	 */
-	handleLogin(_req: IncomingMessage, res: ServerResponse, _url: URL, service: AuthenticationService) {
+	handleLogin(_req: IncomingMessage, res: ServerResponse, url: URL, service: AuthenticationService) {
+		const clientState = url.searchParams.get("state") || "";
+		if (clientState.length >= 40) {
+			res.writeHead(400);
+			res.end();
+			return;
+		}
+
 		const state = randomBytes(20).toString("hex");
-		this.activeStates.set(state, Date.now() + 15 * 60 * 1000); // 15 minutes
+		this.activeStates.set(state, {timeout: Date.now() + 15 * 60 * 1000, clientState}); // 15 minutes
 		res.writeHead(302, {Location: service.getLoginRedirect(state)});
 		res.end();
 	}
@@ -61,7 +68,7 @@ class AuthenticationManager {
 		}
 
 		const expiration = this.activeStates.get(state);
-		if (!expiration || expiration < Date.now()) {
+		if (!expiration || expiration.timeout < Date.now()) {
 			res.writeHead(400);
 			res.end();
 			return;
@@ -71,7 +78,7 @@ class AuthenticationManager {
 		service.handleResponse(url.searchParams).then((id) => {
 			const authToken = randomBytes(20).toString("hex");
 			this.authTokens.set(authToken, {id, expiresAt: Date.now() + 10 * 1000}); // 10 seconds (client callback should be immediate)
-			res.writeHead(302, {Location: `${clientUrl}/auth/?token=${authToken}`});
+			res.writeHead(302, {Location: `${clientUrl}/auth/?token=${authToken}${expiration.clientState ? `&state=${expiration.clientState}` : ""}`});
 			res.end();
 		}).catch((e: AuthenticationException) => {
 			res.writeHead(422, {"Content-Type": "text/plain"});
@@ -267,7 +274,7 @@ class AuthenticationManager {
 			}
 		});
 		this.activeStates.forEach((value, key) => {
-			if (value < Date.now()) {
+			if (value.timeout < Date.now()) {
 				this.activeStates.delete(key);
 			}
 		});

@@ -29,6 +29,12 @@ paths:
         Currently only Discord is supported.
       parameters:
         - $ref: "#/components/parameters/AuthProvider"
+        - name: state
+          in: query
+          description: A state parameter to prevent CSRF attacks, highly recommended
+          schema:
+            type: string
+            example: abc123
       responses:
         302:
           description: Redirect to the provider's authorization page
@@ -39,6 +45,8 @@ paths:
                 type: string
                 format: uri
                 example: https://discord.com/api/oauth2/authorize?client_id=1194399064440189029&redirect_uri=https%3A%2F%2Fwarfront.io%2Fapi%2Fauth%2Fdiscord&response_type=code&scope=identify&state=1234567890
+        400:
+          description: The state parameter is too long
   /auth/{provider}/:
     get:
       operationId: handleOAuthCallback
