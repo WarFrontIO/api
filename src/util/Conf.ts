@@ -1,4 +1,5 @@
 import {randomBytes} from "node:crypto";
+import {type IncomingMessage} from "http";
 
 /**
  * Port to run the server on
@@ -16,6 +17,10 @@ export const clientUrl = process.env.CLIENT_URL ? process.env.CLIENT_URL.replace
  * Private internal service token
  */
 export const serviceToken = process.env.SERVICE_TOKEN ? Buffer.from(process.env.SERVICE_TOKEN, "base64") : randomBytes(32);
+/**
+ * Whether to use the X-Forwarded-For header as the IP address
+ */
+export const getIP = process.env.USE_X_FORWARDED_FOR ? (req: IncomingMessage) => req.headers["x-forwarded-for"]?.toString() : (req: IncomingMessage) => req.socket.remoteAddress;
 /**
  * MySQL database host
  */

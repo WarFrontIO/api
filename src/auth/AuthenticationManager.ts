@@ -9,6 +9,7 @@ import {housekeeping} from "../util/Housekeeping";
 import {generateExternalToken, generateToken, verifyToken} from "./TokenManager";
 import {logout, refreshDevice, registerDevice, revokeDevice} from "../db/adapters/AuthenticationAdapter";
 import {prettifyId} from "../util/IdPrettifier";
+import {TokenBucket} from "../util/TokenBucket";
 
 class AuthenticationManager {
 	private readonly services: Map<string, AuthenticationService> = new Map();
@@ -27,8 +28,8 @@ class AuthenticationManager {
 		}
 		this.services.set(name, service);
 
-		registerRoute(`/login/${name}`, (req, res, url) => this.handleLogin(req, res, url, service));
-		registerRoute(`/auth/${name}`, (req, res, url) => this.handleResponse(req, res, url, service));
+		registerRoute(`/login/${name}`, (req, res, url) => this.handleLogin(req, res, url, service), new TokenBucket(3, .1));
+		registerRoute(`/auth/${name}`, (req, res, url) => this.handleResponse(req, res, url, service), new TokenBucket(3, .1));
 	}
 
 	/**
@@ -281,15 +282,16 @@ class AuthenticationManager {
 	}
 }
 
+const authPool = new TokenBucket(5, .2);
 const manager = new AuthenticationManager();
 
 manager.registerService("discord", DiscordAuthenticationService.build());
 
-registerPostRoute("/auth", manager.handleInitialToken.bind(manager));
-registerPostRoute("/token", manager.handleRefreshToken.bind(manager));
-registerPostRoute("/token/external", manager.handleExternalToken.bind(manager));
-registerPostRoute("/revoke", manager.revoke.bind(manager));
-registerPostRoute("/logout", manager.logout.bind(manager));
+registerPostRoute("/auth", manager.handleInitialToken.bind(manager), new TokenBucket(3, .1));
+registerPostRoute("/token", manager.handleRefreshToken.bind(manager), authPool);
+registerPostRoute("/token/external", manager.handleExternalToken.bind(manager), authPool);
+registerPostRoute("/revoke", manager.revoke.bind(manager), authPool);
+registerPostRoute("/logout", manager.logout.bind(manager), authPool);
 
 housekeeping.registerMinorTask(manager.cleanUpTokens.bind(manager));
 

@@ -1,6 +1,9 @@
 import {registerRoute} from "../APIServer";
 import {createReadStream, statSync} from "node:fs";
 import {clientUrl, hostURL} from "./Conf";
+import {TokenBucket} from "./TokenBucket";
+
+const descRateLimit = new TokenBucket(5, 1);
 
 registerRoute("/openapi.yaml", (req, res) => {
 	res.writeHead(200, {
@@ -11,7 +14,7 @@ registerRoute("/openapi.yaml", (req, res) => {
 
 	const readStream = createReadStream("openapi.yaml");
 	readStream.pipe(res);
-});
+}, descRateLimit);
 
 registerRoute("", (req, res) => {
 	res.writeHead(200, {
@@ -191,4 +194,4 @@ pre {
 	`);
 
 	res.end();
-});
+}, descRateLimit);
