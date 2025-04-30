@@ -3,7 +3,7 @@ import {DiscordAuthenticationService} from "./DiscordAuthenticationService";
 import {registerPostRoute, registerRoute} from "../APIServer";
 import {IncomingMessage, ServerResponse} from "http";
 import {randomBytes, timingSafeEqual} from "node:crypto";
-import {clientUrl, serviceToken} from "../util/Conf";
+import {allowedHosts, serviceToken} from "../util/Conf";
 import {AuthenticationException} from "../util/exception/AuthenticationException";
 import {housekeeping} from "../util/Housekeeping";
 import {generateExternalToken, generateToken, verifyToken} from "./TokenManager";
@@ -13,7 +13,7 @@ import {TokenBucket} from "../util/TokenBucket";
 
 class AuthenticationManager {
 	private readonly services: Map<string, AuthenticationService> = new Map();
-	private readonly activeStates: Map<string, { timeout: number, clientState: string }> = new Map();
+	private readonly activeStates: Map<string, { timeout: number, clientState: string, redirect: string }> = new Map();
 	private readonly authTokens: Map<string, { id: number, expiresAt: number }> = new Map();
 
 	/**
@@ -41,14 +41,15 @@ class AuthenticationManager {
 	 */
 	handleLogin(_req: IncomingMessage, res: ServerResponse, url: URL, service: AuthenticationService) {
 		const clientState = url.searchParams.get("state") || "";
-		if (clientState.length >= 40) {
+		const redirect = url.searchParams.get("redirect") || "";
+		if (clientState.length >= 40 || redirect.length >= 40 || !allowedHosts.includes(redirect)) {
 			res.writeHead(400);
 			res.end();
 			return;
 		}
 
 		const state = randomBytes(20).toString("hex");
-		this.activeStates.set(state, {timeout: Date.now() + 15 * 60 * 1000, clientState}); // 15 minutes
+		this.activeStates.set(state, {timeout: Date.now() + 15 * 60 * 1000, clientState, redirect}); // 15 minutes
 		res.writeHead(302, {Location: service.getLoginRedirect(state)});
 		res.end();
 	}
@@ -79,7 +80,7 @@ class AuthenticationManager {
 		service.handleResponse(url.searchParams).then((id) => {
 			const authToken = randomBytes(20).toString("hex");
 			this.authTokens.set(authToken, {id, expiresAt: Date.now() + 10 * 1000}); // 10 seconds (client callback should be immediate)
-			res.writeHead(302, {Location: `${clientUrl}/auth/?token=${authToken}${expiration.clientState ? `&state=${expiration.clientState}` : ""}`});
+			res.writeHead(302, {Location: `${expiration.redirect}/?token=${authToken}${expiration.clientState ? `&state=${expiration.clientState}` : ""}`});
 			res.end();
 		}).catch((e: AuthenticationException) => {
 			res.writeHead(422, {"Content-Type": "text/plain"});

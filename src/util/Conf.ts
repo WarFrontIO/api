@@ -14,6 +14,10 @@ export const hostURL = process.env.HOST_URL ? (process.env.HOST_URL.startsWith("
  */
 export const clientUrl = process.env.CLIENT_URL ? process.env.CLIENT_URL.replace(/\/$/, "") : "https://warfront.io";
 /**
+ * Allowed authentication hosts
+ */
+export const allowedHosts = process.env.ALLOWED_HOSTS ? process.env.ALLOWED_HOSTS.split(",") : ["http://localhost:8080/auth"]
+/**
  * Private internal service token
  */
 export const serviceToken = process.env.SERVICE_TOKEN ? Buffer.from(process.env.SERVICE_TOKEN, "base64") : randomBytes(32);
