@@ -1,4 +1,4 @@
-import {createPool, ResultSetHeader, RowDataPacket} from "mysql2/promise";
+import {createPool, QueryError, ResultSetHeader, RowDataPacket} from "mysql2/promise";
 import {dbHost, dbName, dbPassword, dbPort, dbUser} from "../util/Conf";
 
 const db = createPool({
@@ -18,7 +18,7 @@ const db = createPool({
  */
 export async function run(query: string, params: (string | number)[]): Promise<number> {
 	const [result] = await db.execute<ResultSetHeader>(query, params).catch(err => {
-		console.error(err);
+		prettyPrintError(err);
 		throw err;
 	});
 	if (!result || !result.affectedRows) {
@@ -34,9 +34,9 @@ export async function run(query: string, params: (string | number)[]): Promise<n
  * @returns The ID of the inserted row
  * @throws Error if the query fails
  */
-export async function insert(query: string, params: (string | number)[]): Promise<number> {
+export async function insert(query: string, params: (string | number | Uint8Array)[]): Promise<number> {
 	const [result] = await db.execute<ResultSetHeader>(query, params).catch(err => {
-		console.error(err);
+		prettyPrintError(err);
 		throw err;
 	});
 	if (!result || !result.insertId) {
@@ -54,7 +54,7 @@ export async function insert(query: string, params: (string | number)[]): Promis
  */
 export async function get<T>(query: string, params: (string | number)[]): Promise<T> {
 	const [rows] = await db.execute<RowDataPacket[]>(query, params).catch(err => {
-		console.error(err);
+		prettyPrintError(err);
 		throw err;
 	});
 	if (!rows || !rows.length) {
@@ -74,11 +74,25 @@ export async function get<T>(query: string, params: (string | number)[]): Promis
  */
 export async function getAll<T>(query: string, params: (string | number)[]): Promise<T[]> {
 	const [rows] = await db.execute<RowDataPacket[]>(query, params).catch(err => {
-		console.error(err);
+		prettyPrintError(err);
 		throw err;
 	});
 	if (!rows) {
 		throw new Error("No results found");
 	}
 	return rows as T[];
+}
+
+function prettyPrintError(err: unknown) {
+	if (err instanceof Error && (err as QueryError).code) {
+		switch ((err as QueryError).code) {
+			case "ECONNREFUSED":
+				console.error("Could not connect to the database. Please check your configuration.");
+				break;
+			default:
+				console.error(err);
+		}
+	} else {
+		console.error(err);
+	}
 }
