@@ -56,13 +56,14 @@ route("GET", "/").handle(() => new Response(
 			result.strings = [
 				result.strings[0],
 				result.strings[1],
-				">",
+				\`">\`,
 				"",
 				"",
 				result.strings[5].replace("</div>\\n", ""),
 				result.strings[6],
 				result.strings[7]
 			];
+			result.values[2] = result.values[3] = "";
 			result.strings.raw = result.strings;
 
 			if (result.values[6].values[0].values[4] && result.values[6].values[0].values[4].values[0] && result.values[6].values[0].values[4].values[0].strings[0].includes("xxx-of-descr")) {
