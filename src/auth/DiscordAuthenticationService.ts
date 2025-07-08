@@ -1,7 +1,7 @@
-import {AuthenticationService} from "./AuthenticationService";
+import type {AuthenticationService} from "./AuthenticationService";
+import type {ServiceUser} from "./AuthenticationManager";
 import {AuthenticationException} from "../util/exception/AuthenticationException";
 import {hostURL} from "../util/Conf";
-import {ServiceUser} from "./AuthenticationManager";
 import {getToken, storeToken} from "../db/adapters/AuthenticationAdapter";
 
 export class DiscordAuthenticationService implements AuthenticationService {

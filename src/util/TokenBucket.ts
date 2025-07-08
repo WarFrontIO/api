@@ -32,6 +32,18 @@ export class TokenBucket {
 	}
 
 	/**
+	 * Test whether tokens could be consumed from the bucket
+	 * @param key The key to consume tokens for
+	 * @param tokens The number of tokens to consume, should be smaller than the capacity
+	 * @returns true if the tokens can be consumed, false if there are not enough tokens
+	 */
+	canConsume(key: string, tokens: number): boolean {
+		const tokensUsed = this.tokens.get(key) || 0;
+		const totalTokens = Date.now() * this.refillRate;
+		return tokensUsed + tokens <= totalTokens;
+	}
+
+	/**
 	 * Remove all keys that have not been used in a while (reached maximum capacity again)
 	 * @private
 	 */

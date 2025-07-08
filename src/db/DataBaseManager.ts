@@ -1,4 +1,4 @@
-import {createPool, QueryError, ResultSetHeader, RowDataPacket} from "mysql2/promise";
+import {createPool, type QueryError, type ResultSetHeader, type RowDataPacket} from "mysql2/promise";
 import {dbHost, dbName, dbPassword, dbPort, dbUser} from "../util/Conf";
 
 const db = createPool({

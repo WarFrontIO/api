@@ -1,28 +1,18 @@
-import {registerRoute} from "../APIServer";
-import {createReadStream, statSync} from "node:fs";
+import {route} from "./RouteBuilder.ts";
 import {clientUrl, hostURL} from "./Conf";
 import {TokenBucket} from "./TokenBucket";
 
 const descRateLimit = new TokenBucket(5, 1);
 
-registerRoute("/openapi.yaml", (req, res) => {
-	res.writeHead(200, {
+route("GET", "/openapi.yaml").handle(() => new Response(Bun.file("openapi.yaml"), {
+	headers: {
 		"Content-Type": "application/yaml",
-		"Access-Control-Allow-Origin": "*",
-		"Content-Length": statSync("openapi.yaml").size
-	});
+		"Access-Control-Allow-Origin": "*"
+	}
+}), descRateLimit);
 
-	const readStream = createReadStream("openapi.yaml");
-	readStream.pipe(res);
-}, descRateLimit);
-
-registerRoute("", (req, res) => {
-	res.writeHead(200, {
-		"Content-Type": "text/html"
-	});
-
-	/** @language html */
-	res.write(`
+route("GET", "/").handle(() => new Response(
+	/** @language html */`
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -191,7 +181,4 @@ pre {
 </rapi-doc>
 </body>
 </html>
-	`);
-
-	res.end();
-}, descRateLimit);
+	`, {headers: {"Content-Type": "text/html"}}), descRateLimit);

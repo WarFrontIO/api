@@ -1,4 +1,4 @@
-import {ServiceUser} from "./AuthenticationManager";
+import type {ServiceUser} from "./AuthenticationManager";
 
 export interface AuthenticationService {
 	/**

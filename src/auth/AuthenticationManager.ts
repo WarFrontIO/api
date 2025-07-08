@@ -1,7 +1,7 @@
-import {AuthenticationService} from "./AuthenticationService";
+import type {AuthenticationService} from "./AuthenticationService";
+import type {BunRequest, Server} from "bun";
 import {DiscordAuthenticationService} from "./DiscordAuthenticationService";
-import {registerPostRoute, registerRoute} from "../APIServer";
-import {IncomingMessage, ServerResponse} from "http";
+import {initAuthHandlers, route} from "../util/RouteBuilder.ts";
 import {randomBytes, timingSafeEqual} from "node:crypto";
 import {allowedHosts, serviceToken} from "../util/Conf";
 import {AuthenticationException} from "../util/exception/AuthenticationException";
@@ -18,8 +18,8 @@ class AuthenticationManager {
 
 	/**
 	 * Register an authentication service.
-	 * @param name the name of the service
-	 * @param service the service to register
+	 * @param name The name of the service
+	 * @param service The service to register
 	 */
 	registerService(name: string, service: AuthenticationService | null) {
 		if (!service) {
@@ -28,242 +28,205 @@ class AuthenticationManager {
 		}
 		this.services.set(name, service);
 
-		registerRoute(`/login/${name}`, (req, res, url) => this.handleLogin(req, res, url, service), new TokenBucket(3, .1));
-		registerRoute(`/auth/${name}`, (req, res, url) => this.handleResponse(req, res, url, service), new TokenBucket(3, .1));
+		route("GET", `/login/${name}`, true).handle(this.handleLogin.bind(this, service), new TokenBucket(3, .1));
+		route("GET", `/auth/${name}`, true).handle(this.handleResponse.bind(this, service), new TokenBucket(3, .1));
 	}
 
 	/**
-	 * Handle login request, this will redirect the user to the login provider.
-	 * @param _req the request
-	 * @param res the response
-	 * @param url the URL
-	 * @param service the authentication service
+	 * Handle login request.
+	 * This will redirect the user to the login provider.
+	 * @param service The authentication service
+	 * @param searchParams The parameters
 	 */
-	handleLogin(_req: IncomingMessage, res: ServerResponse, url: URL, service: AuthenticationService) {
-		const clientState = url.searchParams.get("state") || "";
-		const redirect = url.searchParams.get("redirect") || "";
+	handleLogin(service: AuthenticationService, searchParams: URLSearchParams): Response {
+		const clientState = searchParams.get("state") || "";
+		const redirect = searchParams.get("redirect") || "";
 		if (clientState.length >= 40 || redirect.length >= 40 || !allowedHosts.includes(redirect)) {
-			res.writeHead(400);
-			res.end();
-			return;
+			return new Response("Bad Request", {status: 400});
 		}
 
 		const state = randomBytes(20).toString("hex");
 		this.activeStates.set(state, {timeout: Date.now() + 15 * 60 * 1000, clientState, redirect}); // 15 minutes
-		res.writeHead(302, {Location: service.getLoginRedirect(state)});
-		res.end();
+		return Response.redirect(service.getLoginRedirect(state))
 	}
 
 	/**
 	 * Handle response from the login provider.
-	 * @param _req the request
-	 * @param res the response
-	 * @param url the URL, contains information from the login provider such as the state
-	 * @param service the authentication service
+	 * @param service The authentication service
+	 * @param searchParams The parameters
 	 */
-	handleResponse(_req: IncomingMessage, res: ServerResponse, url: URL, service: AuthenticationService) {
-		const state = service.getState(url.searchParams);
+	async handleResponse(service: AuthenticationService, searchParams: URLSearchParams): Promise<Response> {
+		const state = service.getState(searchParams);
 		if (!state || !this.activeStates.has(state)) {
-			res.writeHead(400);
-			res.end();
-			return;
+			return new Response("Bad Request", {status: 400});
 		}
 
 		const expiration = this.activeStates.get(state);
 		if (!expiration || expiration.timeout < Date.now()) {
-			res.writeHead(400);
-			res.end();
-			return;
+			return new Response("Bad Request", {status: 400});
 		}
 		this.activeStates.delete(state);
 
-		service.handleResponse(url.searchParams).then((id) => {
+		return await service.handleResponse(searchParams).then((id) => {
 			const authToken = randomBytes(20).toString("hex");
 			this.authTokens.set(authToken, {id, expiresAt: Date.now() + 10 * 1000}); // 10 seconds (client callback should be immediate)
-			res.writeHead(302, {Location: `${expiration.redirect}/?token=${authToken}${expiration.clientState ? `&state=${expiration.clientState}` : ""}`});
-			res.end();
+			return Response.redirect(`${expiration.redirect}/?token=${authToken}${expiration.clientState ? `&state=${expiration.clientState}` : ""}`);
 		}).catch((e: AuthenticationException) => {
-			res.writeHead(422, {"Content-Type": "text/plain"});
-			res.write(e.message);
-			res.end();
+			return new Response(e.message, {status: 422});
 		});
 	}
 
 	/**
-	 * Handle initial token request, this will be requested by the client after logging in.
-	 * @param _req the request
-	 * @param res the response
-	 * @param url the URL
+	 * Handle the initial token request.
+	 * The client will request this after logging in.
+	 * @param body The body
 	 */
-	async handleInitialToken(_req: IncomingMessage, res: ServerResponse, url: URL) {
-		const token = url.searchParams.get("token") || "";
+	async handleInitialToken(body: URLSearchParams): Promise<Response> {
+		const token = body.get("token");
 		if (!token) {
-			res.writeHead(400);
-			res.end();
-			return;
+			return new Response("Bad Request", {status: 400});
 		}
 
 		if (!this.authTokens.has(token)) {
-			res.writeHead(401, {"Content-Type": "text/plain"});
-			res.write("Invalid token");
-			res.end();
-			return;
+			return new Response("Invalid token", {status: 401});
 		}
 
 		const authToken = this.authTokens.get(token);
 		if (!authToken || authToken.expiresAt < Date.now()) {
-			res.writeHead(401, {"Content-Type": "text/plain"});
-			res.write("Token expired, please try again");
-			res.end();
-			return;
+			return new Response("Token expired, please try again", {status: 401});
 		}
 		this.authTokens.delete(token);
 
 		const refreshToken = await registerDevice(authToken.id).catch(() => null);
 		if (!refreshToken) {
-			res.writeHead(500, {"Content-Type": "text/plain"});
-			res.write("Failed to generate refresh token");
-			res.end();
-			return;
+			return new Response("Failed to generate refresh token", {status: 500});
 		}
 
-		res.writeHead(200, {"Content-Type": "text/plain"});
-		res.write(refreshToken);
-		res.end();
+		return new Response(refreshToken);
 	}
 
 	/**
-	 * Handle token refresh request, this will be requested by the client when they refresh the page or when the token expires.
-	 * @param _req the request
-	 * @param res the response
-	 * @param url the URL
+	 * Handle token refresh request.
+	 * The client will request this when they refresh the page or when the token expires.
+	 * @param body The body
 	 */
-	async handleRefreshToken(_req: IncomingMessage, res: ServerResponse, url: URL) {
-		const token = url.searchParams.get("token") || "";
+	async handleRefreshToken(body: URLSearchParams): Promise<Response> {
+		const token = body.get("token");
 		if (!token) {
-			res.writeHead(400);
-			res.end();
-			return;
+			return new Response("Bad Request", {status: 400});
 		}
 
 		const tokenData = await refreshDevice(token).catch(() => null);
 		if (!tokenData) {
-			res.writeHead(401, {"Content-Type": "text/plain"});
-			res.write("Invalid token");
-			res.end();
-			return;
+			return new Response("Invalid token", {status: 401});
 		}
 
 		const handler = this.services.get(tokenData.service);
 		if (!handler) {
-			res.writeHead(500, {"Content-Type": "text/plain"});
-			res.write("Invalid handler");
-			res.end();
-			return;
+			return new Response("Invalid handler", {status: 500});
 		}
 
 		const user = await handler.getUser(tokenData.user_id).then(user => buildAPIUser(user, tokenData.id, tokenData.service)).catch(() => null);
 		if (!user) {
-			res.writeHead(500, {"Content-Type": "text/plain"});
-			res.write("Failed to get user information");
-			res.end();
-			return;
+			return new Response("Failed to get user information", {status: 500});
 		}
 
 		const accessToken = await generateToken(user).catch(() => null);
 		if (!accessToken) {
-			res.writeHead(500, {"Content-Type": "text/plain"});
-			res.write("Failed to generate access token");
-			res.end();
-			return;
+			return new Response("Failed to generate an access token", {status: 500});
 		}
 
-		res.writeHead(200, {"Content-Type": "application/json"});
-		res.write(JSON.stringify({access_token: accessToken.token, expires_in: accessToken.expiresIn - 60, refresh_token: tokenData.token, user}));
-		res.end();
+		return Response.json({access_token: accessToken.token, expires_in: accessToken.expiresIn - 60, refresh_token: tokenData.token, user});
 	}
 
 	/**
-	 * Handle external token request, this will generate a token to be used with third-party services.
-	 * @param req the request
-	 * @param res the response
-	 * @param url the URL
+	 * Get the API user information.
+	 * @param id The user ID
+	 * @param service The service
+	 * @param user_id The user ID on the service
 	 */
-	handleExternalToken(req: IncomingMessage, res: ServerResponse, url: URL) {
-		const host = url.searchParams.get("host") || "";
+	async getAPIUser(id: number, service: string, user_id: string): Promise<APIUser | undefined> {
+		const handler = this.services.get(service);
+		if (!handler) {
+			throw new Error("Invalid handler");
+		}
+
+		return await handler.getUser(user_id).then(user => buildAPIUser(user, id, service)).catch(() => undefined);
+	}
+
+	/**
+	 * Handle external token request.
+	 * This will generate a token to be used with third-party services.
+	 * @param body The body
+	 * @param user The user this request comes from
+	 */
+	async handleExternalToken(body: URLSearchParams, user: User): Promise<Response> {
+		const host = body.get("host");
 		if (!host) {
-			res.writeHead(400);
-			res.end();
-			return;
+			return new Response("Bad Request", {status: 400});
 		}
 
-		auth(req, res).then((user) => {
-			generateExternalToken(toAPIUser(user), host).then((token) => {
-				res.writeHead(200, {"Content-Type": "text/plain"});
-				res.write(token);
-				res.end();
-			}).catch(() => {
-				res.writeHead(500);
-				res.end();
-			});
-		}).catch(() => {});
+		const token = await generateExternalToken(toAPIUser(user), host).catch(() => undefined);
+		if (!token) {
+			return new Response("Failed to generate external token", {status: 500});
+		}
+		return new Response(token);
 	}
 
 	/**
-	 * Handle logout request, revokes the specified refresh token.
-	 * @param _req the request
-	 * @param res the response
-	 * @param url the URL
+	 * Handle logout request.
+	 * This revokes the specified refresh token.
+	 * @param body The body
 	 */
-	revoke(_req: IncomingMessage, res: ServerResponse, url: URL) {
-		const token = url.searchParams.get("token") || "";
+	revoke(body: URLSearchParams): Response {
+		const token = body.get("token");
 		if (!token) {
-			res.writeHead(400);
-			res.end();
-			return;
+			return new Response("Bad Request", {status: 400});
 		}
 		revokeDevice(token).catch(() => {});
-		res.writeHead(200);
-		res.end();
+		return new Response("OK");
 	}
 
 	/**
-	 * Handle logout request, revokes all refresh tokens for the specified user.
-	 * @param req the request
-	 * @param res the response
-	 * @param _url the URL
+	 * Handle logout request.
+	 * This revokes all refresh tokens for the specified user.
+	 * @param user The user this request comes from
 	 */
-	logout(req: IncomingMessage, res: ServerResponse, _url: URL) {
-		auth(req, res).then((user) => {
-			logout(user.id).catch(() => {});
-			res.writeHead(200);
-			res.end();
-		}).catch(() => {});
+	logout(user: User): Response {
+		logout(user.id).catch(() => {});
+		return new Response("OK");
 	}
 
 	/**
 	 * Verify a request.
-	 * @param req the request
-	 * @param res the response
+	 * @param force Whether to return error response if user did not try to sign in
+	 * @param req The request
+	 * @param sev The bun http server
+	 * @throws Error If user could not be authenticated
 	 */
-	async verifyRequest(req: IncomingMessage, res: ServerResponse): Promise<User> {
-		const token = req.headers.authorization;
+	async verifyRequest<P extends string>(this: undefined, force: boolean, req: BunRequest<P>, sev: Server): Promise<{ success: true, user: User | null } | { success: false, error: Response }> {
+		const ip = sev.requestIP(req)?.address;
+		if (!ip) {
+			return {success: false, error: new Response("Bad Request", {status: 400})};
+		}
+		if (!authPool.canConsume(ip, 1)) {
+			return {success: false, error: new Response("Too Many Requests", {status: 429, headers: {"Retry-After": Math.ceil(authPool.timeUntilRefill(ip, 1) / 1000).toString()}})};
+		}
+		const token = req.headers.get("authorization");
 		if (!token || !token.startsWith("Bearer ")) {
-			res.writeHead(401, {"Content-Type": "text/plain"});
-			res.write("Unauthorized");
-			res.end();
-			throw new AuthenticationException("Invalid token");
+			if (force) {
+				return {success: false, error: new Response("Unauthorized", {status: 400})};
+			}
+			return {success: true, user: null}; //No sign in attempt
 		}
 
 		const user = await verifyToken(token.substring(7)).catch(() => null);
 		if (!user) {
-			res.writeHead(401, {"Content-Type": "text/plain"});
-			res.write("Unauthorized");
-			res.end();
-			throw new AuthenticationException("Invalid token");
+			authPool.consume(ip, 1);
+			return {success: false, error: new Response("Unauthorized", {status: 401})};
 		}
 
-		return user;
+		return {success: true, user};
 	}
 
 	/**
@@ -286,49 +249,50 @@ class AuthenticationManager {
 const authPool = new TokenBucket(5, .2);
 const manager = new AuthenticationManager();
 
-manager.registerService("discord", DiscordAuthenticationService.build());
-
-registerPostRoute("/auth", manager.handleInitialToken.bind(manager), new TokenBucket(3, .1));
-registerPostRoute("/token", manager.handleRefreshToken.bind(manager), authPool);
-registerPostRoute("/token/external", manager.handleExternalToken.bind(manager), authPool);
-registerPostRoute("/revoke", manager.revoke.bind(manager), authPool);
-registerPostRoute("/logout", manager.logout.bind(manager), authPool);
-
-housekeeping.registerMinorTask(manager.cleanUpTokens.bind(manager));
-
-/**
- * Get the user information from the request.
- * Use this method for all API routes that require authentication.
- * @param req the request
- * @param res the response
- */
-export const auth = manager.verifyRequest.bind(manager);
-
 /**
  * Service authentication.
  * Use this method for all internal service endpoints e.g. game server results.
- * @param req the request
- * @param res the response
+ * @param force Whether to return error response if user did not try to sign in
+ * @param req The request
+ * @param sev The bun http server
  */
-export async function authService(req: IncomingMessage, res: ServerResponse) {
-	if (!req.headers.authorization || !req.headers.authorization.startsWith("Bearer ") || req.headers.authorization.length - 7 !== serviceToken.length) {
-		res.writeHead(401, {"Content-Type": "text/plain"});
-		res.write("Unauthorized");
-		res.end();
-		throw new AuthenticationException("Invalid token");
+export async function authService<P extends string>(this: undefined, force: boolean, req: BunRequest<P>, sev: Server): Promise<{ success: true, user: boolean } | { success: false, error: Response }> {
+	const ip = sev.requestIP(req)?.address;
+	if (!ip) {
+		return {success: false, error: new Response("Bad Request", {status: 400})};
+	}
+	if (!authPool.canConsume(ip, 1)) {
+		return {success: false, error: new Response("Too Many Requests", {status: 429, headers: {"Retry-After": Math.ceil(authPool.timeUntilRefill(ip, 1) / 1000).toString()}})};
+	}
+	const token = req.headers.get("authorization");
+	if (!token || !token.startsWith("Bearer ") || token.length - 7 !== serviceToken.length) {
+		if (force) {
+			return {success: false, error: new Response("Unauthorized", {status: 400})};
+		}
+		return {success: true, user: false}; //No sign in attempt
 	}
 
-	if (!timingSafeEqual(Buffer.from(req.headers.authorization.substring(7)), serviceToken)) {
-		res.writeHead(401, {"Content-Type": "text/plain"});
-		res.write("Unauthorized");
-		res.end();
-		throw new AuthenticationException("Invalid token");
+	if (!timingSafeEqual(Buffer.from(token.substring(7)), serviceToken)) {
+		authPool.consume(ip, 5);
+		return {success: false, error: new Response("Unauthorized", {status: 401})};
 	}
 
-	res.writeHead(200);
-	res.end();
-	return;
+	return {success: true, user: true};
 }
+
+initAuthHandlers(manager.verifyRequest, authService)
+
+manager.registerService("discord", DiscordAuthenticationService.build());
+
+route("POST", "/auth", true).handle(manager.handleInitialToken.bind(manager), new TokenBucket(3, .1));
+route("POST", "/token", true).handle(manager.handleRefreshToken.bind(manager), authPool);
+route("POST", "/token/external", true).auth().handle(manager.handleExternalToken.bind(manager), authPool);
+route("POST", "/revoke", true).handle(manager.revoke.bind(manager), authPool);
+route("POST", "/logout").auth().handle(manager.logout.bind(manager), authPool);
+
+housekeeping.registerMinorTask(manager.cleanUpTokens.bind(manager));
+
+export const getAPIUser = manager.getAPIUser.bind(manager);
 
 export type User = {
 	/** WF user ID */
@@ -341,6 +305,7 @@ export type User = {
 };
 export type APIUser = Omit<User, "id"> & { id: string };
 export type ServiceUser = Omit<User, "id" | "service"> & Partial<Pick<User, "id" | "service">>;
+export type auth = typeof manager.verifyRequest;
 
 export function buildAPIUser(user: ServiceUser, id: number, service: string): APIUser {
 	return {...user, id: prettifyId(id), service};

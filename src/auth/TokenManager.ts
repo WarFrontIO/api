@@ -1,7 +1,7 @@
 import {existsSync, readFileSync, writeFileSync} from "node:fs";
 import {generateKeyPairSync} from "node:crypto";
 import {sign, verify} from "jsonwebtoken";
-import {User, auth, APIUser} from "./AuthenticationManager";
+import type {User, auth, APIUser} from "./AuthenticationManager";
 import {unprettifyId} from "../util/IdPrettifier";
 
 if (!existsSync("private.key") || !existsSync("public.key")) {

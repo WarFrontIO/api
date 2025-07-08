@@ -1,11 +1,16 @@
 {
   "name": "warfront-api",
+  "scripts": {
+    "run": "bun run src/ApiServer.ts"
+  },
   "dependencies": {
     "typescript": "^5.4.5",
-    "@types/node": "^20.12.13",
-    "mysql2": "^3.10.0",
+    "mysql2": "^3.14.1",
     "jsonwebtoken": "^9.0.2",
-    "@types/jsonwebtoken": "^9.0.6",
     "sqids": "^0.3.0"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.18",
+    "@types/jsonwebtoken": "^9.0.10"
   }
 }
