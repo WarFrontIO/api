@@ -7,15 +7,159 @@ info:
     Production server: [https://warfront.io/api/](https://warfront.io/api/)
   version: v1-pre0
 servers:
-  - url: https://warfront.io/api/
+  - url: https://warfront.io/api/v1/
     description: Production server
 tags:
+  - name: Map Registry
+    description: |
+      Endpoints for map management.
+      
+      This sections uses two different IDs: Map IDs and Map Version IDs, each map can have multiple versions associated with it.
   - name: User Authentication
     description: |
-      Endpoints for user authentication
+      Endpoints for user authentication.
       
       These endpoints should not be used by third-party applications, as they are intended for the main game client only
 paths:
+  /maps/{id}:
+    get:
+      operationId: getMap
+      summary: Get map information
+      tags:
+        - Map Registry
+      description: Get basic information about a map.
+      parameters:
+        - $ref: "#/components/parameters/MapId"
+      responses:
+        200:
+          description: Map information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    description: The map ID (might not be the same as the ID used in the URL, but represents the same map)
+                    example: JShq58
+                  name:
+                    type: string
+                    description: The name of the map
+                    example: Example Map
+                  description:
+                    type: string
+                    description: The description of the map
+                    example: This is an example description.
+                  author:
+                    $ref: "#/components/schemas/User"
+                    description: The author of the map
+                  versions:
+                    $ref: "#/components/schemas/MapVersions"
+                    description: The first page of versions for the selected map
+        400:
+          description: Invalid Map ID
+        404:
+          description: Map with the specified ID does not exist
+  /maps/{id}/versions:
+    get:
+      operationId: getMapVersions
+      summary: Get map versions
+      tags:
+        - Map Registry
+      description: |
+        Get a list of available versions for a map.
+        This endpoint uses pagination and will return at most five entries.
+      parameters:
+        - $ref: "#/components/parameters/MapId"
+      responses:
+        200:
+          description: Map versions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MapVersions"
+        400:
+          description: Invalid Map ID
+  /maps/versions/{id}:
+    get:
+      operationId: downloadMap
+      summary: Get map data
+      tags:
+        - Map Registry
+      description: Get binary map data compatible with the map codec.
+      parameters:
+        - $ref: "#/components/parameters/MapVersionId"
+      responses:
+        200:
+          description: Binary map data
+          content:
+            application/octet-stream:
+              schema:
+                type: binary
+                description: The map data
+                example: "0x0c00040000038000500075431753275000774317532712000028003aa18ba993a8003ba18ba99399000014001d50c5d4c9d4001dd0c5d4c9c6800002000328676261000b6f6ae762e869676a82828100019433b1308005b7b573b17434b3b4cc4c408000ca19d89a8003993a1b3b3a63c3c04000650cec4d4001cc9d0d9d9cd262640000000100086000"
+        400:
+          description: Invalid Map Version ID
+        404:
+          description: Map version with the specified ID does not exist
+        500:
+          description: Failed to decode map
+  /maps/versions/{id}/details:
+    get:
+      operationId: getMapVersion
+      summary: Get map version information
+      tags:
+        - Map Registry
+      description: |
+        Get basic information about a map version.
+        Other than the map information endpoint, this does NOT include the versions field.
+      parameters:
+        - $ref: "#/components/parameters/MapVersionId"
+      responses:
+        200:
+          description: Map version information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    description: The Map Version ID
+                    example: LKWpHO
+                  version:
+                    type: number
+                    description: The map codec version, this is NOT a unique number
+                    example: 2
+                  time:
+                    type: number
+                    description: The timestamp when the map version was uploaded
+                    example: 1735731241
+                  entry:
+                    type: object
+                    description: Map information
+                    properties:
+                      id:
+                        type: string
+                        description: The map ID (might not be the same as the ID used in the URL, but represents the same map)
+                        example: JShq58
+                      name:
+                        type: string
+                        description: The name of the map
+                        example: Example Map
+                      description:
+                        type: string
+                        description: The description of the map
+                        example: This is an example description.
+                      author:
+                        $ref: "#/components/schemas/User"
+                        description: The author of the map
+        400:
+          description: Invalid Map Version ID
+        404:
+          description: Map version with the specified ID does not exist
+        500:
+          description: Failed to load map information
   /login/{provider}/:
     get:
       operationId: loginUser
@@ -348,6 +492,23 @@ components:
           type: string
           description: The avatar URL from the OAuth2 provider
           example: https://example.com/avatar.png
+    MapVersions:
+      type: array
+      items:
+        type: object
+        properties:
+          id:
+            type: string
+            description: The Map Version ID
+            example: LKWpHO
+          version:
+            type: number
+            description: The map codec version, this is NOT a unique number
+            example: 2
+          time:
+            type: number
+            description: The timestamp when the map version was uploaded
+            example: 1735731241
   responses:
     Unauthorized:
       description: Unauthorized
@@ -367,6 +528,22 @@ components:
         enum:
           - discord
       example: discord
+    MapId:
+      name: id
+      in: path
+      required: true
+      description: The Map ID
+      schema:
+        type: string
+      examples: JShq58
+    MapVersionId:
+      name: id
+      in: path
+      required: true
+      description: The Map Version ID
+      schema:
+        type: string
+      example: lpd9RE
   securitySchemes:
     userAuth:
       type: http

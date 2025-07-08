@@ -12,6 +12,15 @@ function cleanTokens() {
 housekeeping.registerMajorTask(cleanTokens);
 
 /**
+ * Get user information
+ * @param id The wf user ID
+ * @returns
+ */
+export async function getUserInfo(id: number): Promise<{ service: string, user_id: string } | undefined> {
+	return await get<{ service: string, user_id: string }>("SELECT service, user_id FROM accounts WHERE id = ?;", [id]).catch(() => undefined);
+}
+
+/**
  * Store a service token for a user (same as creating an account)
  * @param service The service the token is for
  * @param userId The service user ID

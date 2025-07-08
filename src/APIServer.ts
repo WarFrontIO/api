@@ -5,6 +5,7 @@ import {TokenBucket} from "./util/TokenBucket";
 const routes: { [key: string]: { [key: string]: (req: BunRequest<any>, sev: Server) => Response | Promise<Response> } } = {};
 
 require("./auth/AuthenticationManager");
+require("./routes/MapRegistry");
 require("./util/APIDocs");
 
 const server = Bun.serve({
