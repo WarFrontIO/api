@@ -3,6 +3,7 @@ import type {ServiceUser} from "./AuthenticationManager";
 import {AuthenticationException} from "../util/exception/AuthenticationException";
 import {hostURL} from "../util/Conf";
 import {getToken, storeToken} from "../db/adapters/AuthenticationAdapter";
+import {housekeeping} from "../util/Housekeeping";
 
 export class DiscordAuthenticationService implements AuthenticationService {
 	private readonly clientId: string;
@@ -12,6 +13,15 @@ export class DiscordAuthenticationService implements AuthenticationService {
 	constructor(clientId: string, clientSecret: string) {
 		this.clientId = clientId;
 		this.clientSecret = clientSecret;
+
+		housekeeping.registerMajorTask(() => {
+			const now = Date.now();
+			this.activeTokens.forEach((token, id) => {
+				if (token.expiresAt < now) {
+					this.activeTokens.delete(id);
+				}
+			});
+		});
 	}
 
 	/**
