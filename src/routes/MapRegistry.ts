@@ -28,7 +28,7 @@ route("GET", "/maps/:id").handle(async req => {
 route("GET", "/maps/:id/versions", true).handle(async (searchParams, req) => {
 	const id = unprettifyId(req.params.id);
 	const page = parseInt(searchParams.get("page") || "0");
-	if (id === undefined || isNaN(page)) {
+	if (id === undefined || isNaN(page) || page < 0) {
 		return new Response("Bad Request", {status: 400});
 	}
 
@@ -51,7 +51,7 @@ route("GET", "/maps/versions/:id").auth(false, "service").handle(async (_, req) 
 		}
 		return new Response(map);
 	}).catch(() => {
-		return new Response("Failed to decode replay", {status: 500});
+		return new Response("Failed to decode requested map", {status: 500});
 	})
 }, mapPool, 5);
 

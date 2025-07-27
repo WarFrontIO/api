@@ -71,6 +71,12 @@ paths:
         This endpoint uses pagination and will return at most five entries.
       parameters:
         - $ref: "#/components/parameters/MapId"
+        - name: page
+          in: query
+          description: Page to request (zero indexed)
+          schema:
+            type: number
+          example: 0
       responses:
         200:
           description: Map versions
@@ -103,7 +109,13 @@ paths:
         404:
           description: Map version with the specified ID does not exist
         500:
-          description: Failed to decode map
+          description: Failed to decode requested map
+          content:
+            text/plain:
+              schema:
+                description: The error message
+                type: string
+              example: Failed to decode requested map
   /maps/versions/{id}/details:
     get:
       operationId: getMapVersion
@@ -160,7 +172,13 @@ paths:
           description: Map version with the specified ID does not exist
         500:
           description: Failed to load map information
-  /login/{provider}/:
+          content:
+            text/plain:
+              schema:
+                description: The error message
+                type: string
+              example: Failed to load map information
+  /login/{provider}:
     get:
       operationId: loginUser
       summary: Login using an OAuth2 provider
@@ -199,7 +217,7 @@ paths:
                 example: https://discord.com/api/oauth2/authorize?client_id=1194399064440189029&redirect_uri=https%3A%2F%2Fwarfront.io%2Fapi%2Fauth%2Fdiscord&response_type=code&scope=identify&state=1234567890
         400:
           description: Invalid redirect URL or the state parameter is too long
-  /auth/{provider}/:
+  /auth/{provider}:
     get:
       operationId: handleOAuthCallback
       summary: Handle the OAuth2 callback
@@ -244,7 +262,7 @@ paths:
                 type: string
                 description: The error message
               example: Failed to get user information
-  /auth/:
+  /auth:
     post:
       operationId: authClient
       summary: Authenticate client using initial token
@@ -295,7 +313,7 @@ paths:
                 description: The error message
                 type: string
               example: Failed to generate refresh token
-  /token/:
+  /token:
     post:
       operationId: refreshToken
       summary: Request a new access token
@@ -382,7 +400,7 @@ paths:
                 type: string
                 description: The error message
               example: Failed to get user information
-  /token/external/:
+  /token/external:
     post:
       operationId: requestTokenExternal
       summary: Request access token for external services
@@ -424,7 +442,7 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         500:
           description: Error generating access token
-  /revoke/:
+  /revoke:
     post:
       operationId: revokeToken
       summary: Revoke the refresh token
@@ -448,7 +466,7 @@ paths:
           description: Token revoked
         400:
           description: Missing token
-  /logout/:
+  /logout:
     post:
       operationId: logoutUser
       summary: Logout the user
